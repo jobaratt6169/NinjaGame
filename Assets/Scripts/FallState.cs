@@ -3,6 +3,10 @@ using UnityEngine;
 public class FallState : PlayerBaseState
 {
     private float enterTime;
+    private float jumpCooldown = 0.2f; // Match the cooldown from JumpState
+    private float lastJumpTime = -1f;
+    private float wallClingCooldown = 0.2f;
+    private float lastWallClingTime = -1f;
 
     public FallState(PlayerStateMachine stateMachine) : base(stateMachine) { }
 
@@ -11,18 +15,28 @@ public class FallState : PlayerBaseState
         enterTime = Time.time;
         // Play fall animation if available
         if (stateMachine.Animator != null)
-            stateMachine.Animator.Play("FallAnimation");
+            stateMachine.Animator.Play("Fall");
         Debug.Log($"[FallState] Entering Fall State at {enterTime:F2}s");
     }
 
     public override void Tick(float deltaTime)
     {
-        // Allow air control
+        // Only allow horizontal movement during fall
         Vector2 moveInput = stateMachine.InputReader.GetMovementInput();
         float targetVelocityX = moveInput.x * stateMachine.MoveSpeed;
         if (stateMachine.RB != null)
         {
+            // Only modify horizontal velocity, let gravity handle vertical movement
             stateMachine.RB.linearVelocity = new Vector2(targetVelocityX, stateMachine.RB.linearVelocity.y);
+        }
+
+        // Check for wall cling input
+        if (stateMachine.InputReader.IsCrouchHeld() && 
+            stateMachine.IsTouchingWall() && 
+            Time.time - lastWallClingTime >= wallClingCooldown)
+        {
+            stateMachine.SwitchState(stateMachine.WallClingState);
+            return;
         }
 
         // If grounded, transition to Idle/Walk/Run
@@ -45,8 +59,10 @@ public class FallState : PlayerBaseState
             return;
         }
 
-        // Allow jump if jumps remain (double jump)
-        if (stateMachine.InputReader.IsJumpPressed() && stateMachine.JumpsRemaining > 0)
+        // Allow jump if jumps remain and cooldown has passed
+        if (stateMachine.InputReader.IsJumpPressed() && 
+            stateMachine.JumpsRemaining > 0 && 
+            Time.time - lastJumpTime >= jumpCooldown)
         {
             stateMachine.SwitchState(stateMachine.JumpState);
             return;

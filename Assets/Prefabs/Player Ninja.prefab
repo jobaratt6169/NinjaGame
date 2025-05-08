@@ -122,9 +122,10 @@ GameObject:
   - component: {fileID: 8447977035555912616}
   - component: {fileID: 1779346489392483852}
   - component: {fileID: 1914377576693117475}
+  - component: {fileID: -876414480289353095}
   m_Layer: 0
   m_Name: Player Ninja
-  m_TagString: Untagged
+  m_TagString: Player Ninja
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
@@ -159,7 +160,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   <MoveSpeed>k__BackingField: 5
-  <WallJumpForce>k__BackingField: 7.5
+  <WallJumpForce>k__BackingField: 10
   <MaxJumps>k__BackingField: 2
   playerCollider: {fileID: 1779346489392483852}
   standingColliderSize: {x: 1, y: 2}
@@ -236,6 +237,21 @@ Rigidbody2D:
   m_SleepingMode: 1
   m_CollisionDetection: 0
   m_Constraints: 4
+--- !u!114 &-876414480289353095
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 180128}
+  m_Enabled: 0
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 92ee99885d6a747aca02d9446035ff6b, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  moveSpeed: 5
+  jumpForce: 2
+  doubleJumpForce: 2
 --- !u!1 &6734205709435017409
 GameObject:
   m_ObjectHideFlags: 0

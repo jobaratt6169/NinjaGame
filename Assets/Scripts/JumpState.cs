@@ -7,6 +7,8 @@ public class JumpState : PlayerBaseState
     private float enterTime;
     private bool hasJumped = false;
     private bool isWallJump = false;
+    private float jumpCooldown = 0.2f; // Cooldown between jumps
+    private float lastJumpTime = -1f; // Initialize to allow first jump
 
     public JumpState(PlayerStateMachine stateMachine) : base(stateMachine)
     {
@@ -18,13 +20,28 @@ public class JumpState : PlayerBaseState
         hasJumped = false;
         isWallJump = false;
 
+        // Check if we can jump based on cooldown
+        if (Time.time - lastJumpTime < jumpCooldown)
+        {
+            // If on cooldown, transition to appropriate state
+            if (!stateMachine.IsGrounded())
+            {
+                stateMachine.SwitchState(stateMachine.FallState);
+            }
+            else
+            {
+                stateMachine.SwitchState(stateMachine.IdleState);
+            }
+            return;
+        }
+
         // --- Start coyote time (grounded grace period) ---
         stateMachine.GetType().GetField("jumpGroundedGraceTimer", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)
             ?.SetValue(stateMachine, 0.10f);
 
         // Play jump animation
         if (stateMachine.Animator != null)
-            stateMachine.Animator.Play("JumpAnimation");
+            stateMachine.Animator.Play("Jump");
         Debug.Log($"[JumpState] Entering Jump State at {enterTime:F2}s");
 
         // If grounded, set jumps to MaxJumps - 1 (so the ground jump counts as the first jump)
@@ -38,11 +55,14 @@ public class JumpState : PlayerBaseState
                 Vector2 wallJumpDir = GetWallJumpDirection();
                 if (stateMachine.RB != null)
                 {
+                    // Reset velocity before applying wall jump force
                     stateMachine.RB.linearVelocity = Vector2.zero;
-                    stateMachine.RB.AddForce(new Vector2(wallJumpDir.x * wallJumpHorizontalForce, stateMachine.WallJumpForce), ForceMode2D.Impulse);
+                    // Apply wall jump force with proper vertical component
+                    stateMachine.RB.AddForce(new Vector2(wallJumpDir.x * wallJumpHorizontalForce, jumpForce), ForceMode2D.Impulse);
                     hasJumped = true;
                     isWallJump = true;
                     stateMachine.JumpsRemaining = Mathf.Max(0, stateMachine.JumpsRemaining - 1);
+                    lastJumpTime = Time.time; // Set last jump time
                     Debug.Log("[JumpState] Wall Jump performed. Jumps left: " + stateMachine.JumpsRemaining);
                 }
             }
@@ -52,9 +72,12 @@ public class JumpState : PlayerBaseState
             // Ground jump: do not decrement JumpsRemaining (already set to MaxJumps-1 on landing)
             if (stateMachine.RB != null)
             {
-                stateMachine.RB.linearVelocity = new Vector2(stateMachine.RB.linearVelocity.x, 0f); // Reset vertical velocity
+                // Reset vertical velocity before applying jump force
+                stateMachine.RB.linearVelocity = new Vector2(stateMachine.RB.linearVelocity.x, 0f);
+                // Apply pure vertical jump force
                 stateMachine.RB.AddForce(Vector2.up * jumpForce, ForceMode2D.Impulse);
                 hasJumped = true;
+                lastJumpTime = Time.time; // Set last jump time
                 Debug.Log("[JumpState] Ground Jump performed. Jumps left: " + stateMachine.JumpsRemaining);
             }
         }
@@ -64,9 +87,12 @@ public class JumpState : PlayerBaseState
             stateMachine.JumpsRemaining = Mathf.Max(0, stateMachine.JumpsRemaining - 1);
             if (stateMachine.RB != null)
             {
-                stateMachine.RB.linearVelocity = new Vector2(stateMachine.RB.linearVelocity.x, 0f); // Reset vertical velocity
+                // Reset vertical velocity before applying double jump force
+                stateMachine.RB.linearVelocity = new Vector2(stateMachine.RB.linearVelocity.x, 0f);
+                // Apply pure vertical double jump force
                 stateMachine.RB.AddForce(Vector2.up * jumpForce, ForceMode2D.Impulse);
                 hasJumped = true;
+                lastJumpTime = Time.time; // Set last jump time
                 Debug.Log("[JumpState] Double Jump performed. Jumps left: " + stateMachine.JumpsRemaining);
             }
         }
@@ -85,35 +111,36 @@ public class JumpState : PlayerBaseState
         // Debug: Print grounded state and vertical velocity every frame in JumpState
         Debug.Log($"[JumpState] Tick: IsGrounded={stateMachine.IsGrounded()} VelocityY={stateMachine.RB.linearVelocity.y}");
 
-        // Check for Shoot input first
-        if (stateMachine.InputReader.IsShootPressed()) // Use InputReader property
+        // Only allow horizontal movement during jump
+        Vector2 moveInput = stateMachine.InputReader.GetMovementInput();
+        float targetVelocityX = moveInput.x * stateMachine.MoveSpeed;
+        if (stateMachine.RB != null)
         {
-            stateMachine.SwitchState(stateMachine.ShootState);
-            return; // Exit early
+            // Only modify horizontal velocity, let the jump force handle vertical movement
+            stateMachine.RB.linearVelocity = new Vector2(targetVelocityX, stateMachine.RB.linearVelocity.y);
         }
 
-        // Apply horizontal movement input while airborne
-        Vector2 moveInputAir = stateMachine.InputReader.GetMovementInput();
-        float targetVelocityX = moveInputAir.x * stateMachine.MoveSpeed; // Use base MoveSpeed for air control, adjust if needed
-        stateMachine.RB.linearVelocity = new Vector2(targetVelocityX, stateMachine.RB.linearVelocity.y); // Preserve Y velocity
+        // Check for Shoot input first
+        if (stateMachine.InputReader.IsShootPressed())
+        {
+            stateMachine.SwitchState(stateMachine.ShootState);
+            return;
+        }
 
-    
         // If grounded, reset jumps and transition to Idle/Walk/Run
         if (stateMachine.IsGrounded())
         {
             stateMachine.JumpsRemaining = stateMachine.MaxJumps;
-            Vector2 moveInput = stateMachine.InputReader.GetMovementInput(); // Use InputReader property
             if (moveInput == Vector2.zero)
                 stateMachine.SwitchState(stateMachine.IdleState);
-            else if (stateMachine.InputReader.IsRunPressed()) // Use InputReader property
+            else if (stateMachine.InputReader.IsRunPressed())
                 stateMachine.SwitchState(stateMachine.RunState);
             else
                 stateMachine.SwitchState(stateMachine.WalkState);
             return;
         }
-    
+
         // Check if falling against a wall -> transition to Wall Cling
-        // (Check velocity to ensure we are not moving upwards into the wall)
         if (stateMachine.IsTouchingWall() && stateMachine.RB.linearVelocity.y <= 0)
         {
             stateMachine.SwitchState(stateMachine.WallClingState);

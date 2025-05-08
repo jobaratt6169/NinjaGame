@@ -5,6 +5,9 @@ public class WallClingState : PlayerBaseState
     private float slideSpeed = 1.5f; // Adjust this value for desired slide speed
     private float enterTime;
     private bool jumpHeldOnEnter;
+    private float wallClingCooldown = 0.2f;
+    private float lastWallClingTime = -1f;
+    private bool isClinging = true; // Track if we're currently clinging
 
     public WallClingState(PlayerStateMachine stateMachine) : base(stateMachine) { }
 
@@ -12,11 +15,13 @@ public class WallClingState : PlayerBaseState
     {
         enterTime = Time.time;
         jumpHeldOnEnter = stateMachine.InputReader.IsJumpPressed();
+        lastWallClingTime = Time.time;
+        isClinging = true; // Start clinging when entering state
         Debug.Log($"[WallClingState] Entering Wall Cling State at {enterTime:F2}s");
 
-        // Optional: Play wall cling animation
-        // if (stateMachine.Animator != null)
-        //     stateMachine.Animator.Play("WallClingAnimation"); // Replace with your animation name
+        // Play wall cling animation if available
+        if (stateMachine.Animator != null)
+            stateMachine.Animator.Play("WallCling");
 
         // Reduce initial vertical velocity slightly to make the cling feel better
         if (stateMachine.RB != null)
@@ -28,31 +33,56 @@ public class WallClingState : PlayerBaseState
     public override void Tick(float deltaTime)
     {
         // Check for Shoot input first
-        if (stateMachine.InputReader.IsShootPressed()) // Use InputReader property
+        if (stateMachine.InputReader.IsShootPressed())
         {
             stateMachine.SwitchState(stateMachine.ShootState);
-            return; // Exit early
+            return;
         }
 
-        // Apply slow downward slide
-        if (stateMachine.RB != null)
+        // Check if C key is pressed to toggle wall cling
+        if (stateMachine.InputReader.IsCrouchHeld() && Time.time - lastWallClingTime >= wallClingCooldown)
         {
-            // Apply a constant downward velocity, overriding gravity effect while clinging
-            stateMachine.RB.linearVelocity = new Vector2(stateMachine.RB.linearVelocity.x, -slideSpeed);
+            isClinging = !isClinging; // Toggle clinging state
+            lastWallClingTime = Time.time;
+            
+            if (!isClinging)
+            {
+                stateMachine.SwitchState(stateMachine.FallState);
+                return;
+            }
         }
 
-        // Check for jump input to perform a wall jump
-        // Only allow wall jump if jump wasn't held on enter (prevents infinite wall jumps)
-        if (stateMachine.InputReader.IsJumpPressed() && !jumpHeldOnEnter)
+        // Only apply wall cling behavior if we're actually clinging
+        if (isClinging)
         {
-            // Transition to JumpState, which should handle the wall jump logic
-            stateMachine.SwitchState(stateMachine.JumpState);
-            return; // Exit early after state switch
+            // Apply slow downward slide
+            if (stateMachine.RB != null)
+            {
+                // Apply a constant downward velocity, overriding gravity effect while clinging
+                stateMachine.RB.linearVelocity = new Vector2(stateMachine.RB.linearVelocity.x, -slideSpeed);
+            }
+
+            // Check for jump input to perform a wall jump
+            // Only allow wall jump if jump wasn't held on enter (prevents infinite wall jumps)
+            if (stateMachine.InputReader.IsJumpPressed() && !jumpHeldOnEnter && Time.time - lastWallClingTime >= wallClingCooldown)
+            {
+                // Transition to JumpState, which should handle the wall jump logic
+                stateMachine.SwitchState(stateMachine.JumpState);
+                return;
+            }
+            // Update lockout: if jump is released, allow wall jump again
+            if (!stateMachine.InputReader.IsJumpPressed())
+            {
+                jumpHeldOnEnter = false;
+            }
         }
-        // Update lockout: if jump is released, allow wall jump again
-        if (!stateMachine.InputReader.IsJumpPressed())
+        else
         {
-            jumpHeldOnEnter = false;
+            // If not clinging, let gravity take effect
+            if (stateMachine.RB != null)
+            {
+                stateMachine.RB.linearVelocity = new Vector2(stateMachine.RB.linearVelocity.x, stateMachine.RB.linearVelocity.y);
+            }
         }
 
         // Check if grounded

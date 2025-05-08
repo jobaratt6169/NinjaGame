@@ -2,6 +2,9 @@ using UnityEngine;
 
 public class PlayerIdleState : PlayerBaseState
 {
+    private float jumpCooldown = 0.2f; // Match the cooldown from JumpState
+    private float lastJumpTime = -1f;
+
     public PlayerIdleState(PlayerStateMachine stateMachine) : base(stateMachine) { }
 
     public override void Enter()
@@ -9,8 +12,9 @@ public class PlayerIdleState : PlayerBaseState
         // Stop movement if any residual velocity
         if (stateMachine.RB != null)
             stateMachine.RB.linearVelocity = Vector2.zero;
-        // Play Idle Animation (Example)
-        // stateMachine.Animator.Play("IdleAnimationName");
+        // Play Idle Animation
+        if (stateMachine.Animator != null)
+            stateMachine.Animator.Play("Idle");
         Debug.Log("Entering Idle State");
     }
 
@@ -45,15 +49,16 @@ public class PlayerIdleState : PlayerBaseState
             return; // Exit early after state switch
         }
 
-        // Check for Jump input
-        if (stateMachine.InputReader.IsJumpPressed())
+        // Check for Jump input with cooldown
+        if (stateMachine.InputReader.IsJumpPressed() && 
+            stateMachine.JumpsRemaining > 0 && 
+            Time.time - lastJumpTime >= jumpCooldown)
         {
             Debug.Log($"[IdleState] Jump pressed. IsGrounded: {stateMachine.IsGrounded()} JumpsRemaining: {stateMachine.JumpsRemaining}");
-            // Always allow jump if grounded
+            lastJumpTime = Time.time;
             stateMachine.SwitchState(stateMachine.JumpState);
             return;
         }
-
 
         // Check for movement input to transition to Walk/Run
         Vector2 moveInput = stateMachine.InputReader.GetMovementInput(); // Use InputReader property
